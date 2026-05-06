@@ -45,17 +45,10 @@ Claude Desktop - `~/Library/Application Support/Claude/claude_desktop_config.jso
 }
 ```
 
-Claude Code - `~/.claude/settings.json`:
+Claude Code - run once in terminal:
 
-```json
-{
-  "mcpServers": {
-    "maczfit": {
-      "command": "/path/to/maczfit-mcp/.venv/bin/python3",
-      "args": ["/path/to/maczfit-mcp/server.py"]
-    }
-  }
-}
+```bash
+claude mcp add maczfit /path/to/maczfit-mcp/.venv/bin/python3 /path/to/maczfit-mcp/server.py
 ```
 
 Restart Claude after config changes.
