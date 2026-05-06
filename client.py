@@ -14,19 +14,6 @@ from html_parser import (
 
 load_dotenv(Path(__file__).parent / ".env")
 
-APP_TOKEN = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBcGlVc2VyIjoiV1dXIiwia"
-    "HR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9j"
-    "bGFpbXMvZW1haWxhZGRyZXNzIjoiZG9fbm90X3JlbW92ZUBwcm9leGUucGwiLCJ"
-    "odHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2"
-    "NsYWltcy9uYW1lIjoiMzIiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93c"
-    "y8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9zeXN0ZW0iOiJXV1ciLCJDYW5FZGl0"
-    "U2NoZWR1bGVzIjoiRmFsc2UiLCJBY2NvdW50VHlwZSI6IjAiLCJBY2NvdW50VHlw"
-    "ZUF1dGhvcml6ZVJlcXVpcmVkIjoiRmFsc2UiLCJleHAiOjE3NzgxMDE5NzgsImlz"
-    "cyI6Im1hY3pmaXQucGwiLCJhdWQiOiJtYWN6Zml0LnBsIn0.XsOOXSyIi3819S4r"
-    "jM1ufATWSSO2OfdhtDfnJYcggKg"
-)
-
 BASE_URL = "https://www.maczfit.pl"
 
 
@@ -36,6 +23,7 @@ class MaczfitClient:
         self._session.headers.update({"User-Agent": "Mozilla/5.0"})
         self._authenticated = False
         self._csrf: str = ""
+        self._app_token: str = ""
         self._client_id: int = 0
         self._transaction_ids: list[int] = []
 
@@ -57,20 +45,30 @@ class MaczfitClient:
             raise RuntimeError("csrf-token meta tag not found in page")
         return match.group(1)
 
+    def _extract_app_token(self, html: str) -> str:
+        match = re.search(
+            r'const\s+token\s*=\s*["\']([^"\']+)["\']',
+            html,
+        )
+        if not match:
+            raise RuntimeError("app token not found in homepage HTML")
+        return match.group(1)
+
     def login(self) -> None:
         email = os.environ["MACZFIT_EMAIL"]
         password = os.environ["MACZFIT_PASSWORD"]
 
-        # GET homepage to establish session and get CSRF token from meta tag
+        # GET homepage to establish session and get CSRF token + app token
         init = self._session.get(f"{BASE_URL}/")
         init.raise_for_status()
         csrf = self._meta_csrf_token(init.text)
+        self._app_token = self._extract_app_token(init.text)
 
         resp = self._session.post(
             f"{BASE_URL}/login-endpoint",
             json={"email": email, "password": password, "remember_me": False},
             headers={
-                "Authorization": f"Bearer {APP_TOKEN}",
+                "Authorization": f"Bearer {self._app_token}",
                 "X-CSRF-TOKEN": csrf,
                 "x-requested-with": "XMLHttpRequest",
             },
