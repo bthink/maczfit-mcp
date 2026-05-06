@@ -62,6 +62,8 @@ Restart Claude after config changes.
 
 ## Notes
 
+- Only `MACZFIT_EMAIL` and `MACZFIT_PASSWORD` are needed - client ID, transaction IDs,
+  and the app token are all discovered automatically after login
 - Session expires after ~2h - client re-authenticates automatically
 - Changes must be made before 15:00 the day prior to delivery
 - Unofficial usage of your own account via web scraping - no public API
