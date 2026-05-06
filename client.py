@@ -15,6 +15,10 @@ from html_parser import (
 load_dotenv(Path(__file__).parent / ".env")
 
 BASE_URL = "https://www.maczfit.pl"
+API_URL = "https://gw-prd.maczhub-api.maczfit.pl/api/"
+BRAND_ID = 5
+MEAL_TYPES = {1: "Śniadanie", 2: "II Śniadanie", 3: "Obiad", 4: "Podwieczorek", 5: "Kolacja"}
+NUTRIENT_MAP = {"Tłuszcze": "fat", "Węglowodany": "carbs", "Białko": "protein"}
 
 
 class MaczfitClient:
@@ -24,6 +28,7 @@ class MaczfitClient:
         self._authenticated = False
         self._csrf: str = ""
         self._app_token: str = ""
+        self._user_api_token: str = ""
         self._client_id: int = 0
         self._transaction_ids: list[int] = []
 
@@ -81,6 +86,7 @@ class MaczfitClient:
         # After login, fetch account page to get CSRF token + auto-discover client/transaction IDs
         account = self._session.get(f"{BASE_URL}/moje-konto")
         self._csrf = self._meta_csrf_token(account.text)
+        self._user_api_token = self._extract_app_token(account.text)
         self._client_id = parse_user_id(account.text)
         self._transaction_ids = parse_transaction_ids(account.text)
         self._authenticated = True
@@ -190,6 +196,82 @@ class MaczfitClient:
                     result["diet_name"] = pkg["diet_name"]
                     results.append(result)
         return results
+
+    def _api_headers(self) -> dict:
+        return {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._user_api_token}",
+        }
+
+    def _get_nutrient_stats(self, menu_item_id: int) -> dict | None:
+        req = requests.Request(
+            "GET",
+            API_URL + "Shop/Menu/MenuItem/Nutrient/Stats",
+            headers=self._api_headers(),
+            json={"MenuItemId": menu_item_id, "BrandId": BRAND_ID, "Market": 2},
+        )
+        r = requests.Session().send(req.prepare())
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        macros: dict[str, float] = {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
+        for n in data.get("MenuItemNutrients", []):
+            key = NUTRIENT_MAP.get(n["NutrientName"])
+            if key:
+                macros[key] = round(n["StanG"], 1)
+        macros["kcal"] = data.get("SumKcal", 0)
+        return macros
+
+    def _get_package_meals(self, package_id: int) -> list[dict]:
+        if not self._authenticated:
+            self.login()
+        r = requests.post(
+            API_URL + "Transaction/Package/Meals/All",
+            json={"TransactionPackageId": package_id, "ClientId": self._client_id, "BrandId": BRAND_ID, "Market": 2},
+            headers=self._api_headers(),
+        )
+        r.raise_for_status()
+        return r.json().get("Meals", [])
+
+    def get_menu(self, transaction_id: int, date: str) -> dict:
+        """Get meals with macros for a specific diet on a given date."""
+        schedule = self.get_schedule(transaction_id)
+        pkg = next(
+            (p for p in schedule["packages"] if p["transaction_id"] == transaction_id and p["date"] == date),
+            None,
+        )
+        if not pkg:
+            available = [p["date"] for p in schedule["packages"] if p["transaction_id"] == transaction_id]
+            return {"error": f"No package for date {date}", "available_dates": available}
+
+        raw_meals = self._get_package_meals(pkg["package_id"])
+        meals = []
+        total: dict[str, float] = {"kcal": 0.0, "fat": 0.0, "carbs": 0.0, "protein": 0.0}
+
+        for m in raw_meals:
+            mi = m.get("MenuItem", {})
+            meal_type_id = mi.get("MealTypeId", m.get("MealTypeId"))
+            macros = self._get_nutrient_stats(mi["Id"]) if mi.get("Id") else None
+            entry: dict = {
+                "meal_type": MEAL_TYPES.get(meal_type_id, f"Meal {meal_type_id}"),
+                "dish": mi.get("DishName", "?"),
+                "allergens": [a.get("Name", "") for a in mi.get("Allergens", [])],
+                "composition": mi.get("MenuComposition", ""),
+            }
+            if macros:
+                entry.update(macros)
+                for k in ("kcal", "fat", "carbs", "protein"):
+                    total[k] += macros.get(k, 0)
+            meals.append(entry)
+
+        return {
+            "date": date,
+            "diet_name": pkg["diet_name"],
+            "kcal": pkg["kcal"],
+            "meals": meals,
+            "total": {k: round(v, 1) for k, v in total.items()},
+        }
 
     def list_diets(self) -> list[dict]:
         if not self._authenticated:

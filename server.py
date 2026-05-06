@@ -58,5 +58,20 @@ def move_day_by_date(
     return _client.move_day_by_date(from_date, to_date, transaction_ids)
 
 
+@mcp.tool()
+def get_menu(transaction_id: int, date: str) -> dict:
+    """
+    Get the meal plan with macros for a specific diet on a given date.
+
+    Returns each meal (type, dish name, kcal, fat, carbs, protein, allergens, composition)
+    plus a daily total. Date must be within the active schedule (~1 month ahead).
+
+    Args:
+        transaction_id: The diet's transaction ID
+        date: Date in YYYY-MM-DD format
+    """
+    return _client.get_menu(transaction_id, date)
+
+
 if __name__ == "__main__":
     mcp.run()
