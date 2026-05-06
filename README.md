@@ -12,6 +12,7 @@ Local MCP server for managing Maczfit diet deliveries via natural language.
 | `get_schedule(transaction_id)` | Get delivery schedule for a diet |
 | `move_day(transaction_id, package_id, new_date)` | Move a single package |
 | `move_day_by_date(from_date, to_date)` | Move all diets from one date to another |
+| `get_menu(transaction_id, date)` | Get meal plan with macros for a specific date |
 
 ## Setup
 
