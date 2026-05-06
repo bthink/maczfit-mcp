@@ -3,6 +3,18 @@ import json
 from typing import Any
 
 
+def parse_user_id(html: str) -> int:
+    match = re.search(r'(?:var|let|const)\s+userId\s*=\s*(\d+)', html)
+    if not match:
+        raise ValueError("JS variable 'userId' not found in HTML")
+    return int(match.group(1))
+
+
+def parse_transaction_ids(html: str) -> list[int]:
+    txs = _extract_js_var(html, "allTransactions")
+    return list({tx["Id"] for tx in txs if "Id" in tx})
+
+
 def _extract_js_var(html: str, var_name: str) -> Any:
     pattern = rf'(?:var|let|const)\s+{re.escape(var_name)}\s*=\s*(\[.*?\]|\{{.*?\}})\s*;'
     match = re.search(pattern, html, re.DOTALL)

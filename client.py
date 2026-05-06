@@ -1,10 +1,16 @@
 import os
 import re
-import urllib.parse
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
-from html_parser import parse_all_transactions, parse_delivery_dates, parse_delivery_hours, extract_packages
+from html_parser import (
+    parse_all_transactions,
+    parse_delivery_dates,
+    parse_delivery_hours,
+    parse_user_id,
+    parse_transaction_ids,
+    extract_packages,
+)
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -22,8 +28,6 @@ APP_TOKEN = (
 )
 
 BASE_URL = "https://www.maczfit.pl"
-CLIENT_ID = os.environ["MACZFIT_CLIENT_ID"]
-TRANSACTION_IDS = [int(x) for x in os.environ["MACZFIT_TRANSACTION_IDS"].split(",")]
 
 
 class MaczfitClient:
@@ -32,6 +36,8 @@ class MaczfitClient:
         self._session.headers.update({"User-Agent": "Mozilla/5.0"})
         self._authenticated = False
         self._csrf: str = ""
+        self._client_id: int = 0
+        self._transaction_ids: list[int] = []
 
     def _csrf_token(self) -> str:
         return self._csrf
@@ -74,9 +80,11 @@ class MaczfitClient:
             raise RuntimeError(f"Login failed: HTTP {resp.status_code}")
         if not self._session.cookies.get("maczfit_session"):
             raise RuntimeError("Login failed: no session cookie")
-        # After login, fetch account page to get a fresh CSRF token for write operations
+        # After login, fetch account page to get CSRF token + auto-discover client/transaction IDs
         account = self._session.get(f"{BASE_URL}/moje-konto")
         self._csrf = self._meta_csrf_token(account.text)
+        self._client_id = parse_user_id(account.text)
+        self._transaction_ids = parse_transaction_ids(account.text)
         self._authenticated = True
 
     def _get(self, url: str) -> requests.Response:
@@ -140,7 +148,7 @@ class MaczfitClient:
         data = {
             f"DeliveryDates[{package_id}]": new_date,
             "TransactionId": str(transaction_id),
-            "ClientId": CLIENT_ID,
+            "ClientId": str(self._client_id),
         }
         resp = self._post_form(f"{BASE_URL}/my-account/change-delivery-date", data)
         if resp.status_code == 200:
@@ -158,7 +166,7 @@ class MaczfitClient:
         to_date: str,
         transaction_ids: list[int] | None = None,
     ) -> list[dict]:
-        tx_ids = transaction_ids or TRANSACTION_IDS
+        tx_ids = transaction_ids or self._transaction_ids
         results = []
         for tx_id in tx_ids:
             schedule = self.get_schedule(tx_id)
@@ -189,7 +197,7 @@ class MaczfitClient:
         if not self._authenticated:
             self.login()
         # allTransactions on any order page contains all active diets - one request suffices
-        schedule = self.get_schedule(TRANSACTION_IDS[0])
+        schedule = self.get_schedule(self._transaction_ids[0])
         by_tx: dict[int, dict] = {}
         for pkg in schedule["packages"]:
             tx_id = pkg["transaction_id"]
