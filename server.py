@@ -73,5 +73,9 @@ def get_menu(transaction_id: int, date: str) -> dict:
     return _client.get_menu(transaction_id, date)
 
 
-if __name__ == "__main__":
+def main() -> None:
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

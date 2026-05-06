@@ -15,11 +15,10 @@ Local MCP server for managing Maczfit diet deliveries via natural language.
 
 ## Setup
 
-**1. Install dependencies**
+**1. Clone repo**
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+git clone https://github.com/YOUR_USERNAME/maczfit-mcp
 ```
 
 **2. Configure credentials**
@@ -38,8 +37,12 @@ Claude Desktop - `~/Library/Application Support/Claude/claude_desktop_config.jso
 {
   "mcpServers": {
     "maczfit": {
-      "command": "/path/to/maczfit-mcp/.venv/bin/python3",
-      "args": ["/path/to/maczfit-mcp/server.py"]
+      "command": "uvx",
+      "args": ["--from", "/path/to/maczfit-mcp", "maczfit-mcp"],
+      "env": {
+        "MACZFIT_EMAIL": "your@email.com",
+        "MACZFIT_PASSWORD": "yourpassword"
+      }
     }
   }
 }
@@ -48,8 +51,10 @@ Claude Desktop - `~/Library/Application Support/Claude/claude_desktop_config.jso
 Claude Code - run once in terminal:
 
 ```bash
-claude mcp add maczfit /path/to/maczfit-mcp/.venv/bin/python3 /path/to/maczfit-mcp/server.py
+claude mcp add maczfit uvx --from /path/to/maczfit-mcp maczfit-mcp
 ```
+
+`uvx` installs dependencies automatically on first run - no manual venv needed.
 
 Restart Claude after config changes.
 
